@@ -60,5 +60,5 @@ export function createWorld(
     async start() {
       await queue.start();
     },
-  };
+  } as World & { start(): Promise<void> };
 }

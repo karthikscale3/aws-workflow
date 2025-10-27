@@ -1,6 +1,6 @@
 {
   "name": "aws-workflow",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.14",
   "description": "AWS World implementation for Workflow DevKit - Run durable workflows on AWS Lambda with DynamoDB, SQS, and S3",
   "main": "./dist/world/index.js",
   "types": "./dist/world/index.d.ts",
@@ -70,6 +70,9 @@
     "@workflow/errors": "^4.0.1-beta.1",
     "@workflow/world-local": "^4.0.1-beta.1",
     "@vercel/queue": "0.0.0-alpha.24",
+    "aws-cdk-lib": "^2.138.0",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21",
     "commander": "^11.1.0",
     "chalk": "^4.1.2",
     "ora": "^5.4.1",
@@ -79,21 +82,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "aws-cdk-lib": "^2.138.0",
-    "constructs": "^10.3.0",
     "esbuild": "^0.19.0",
     "typescript": "^5.3.3"
-  },
-  "peerDependencies": {
-    "aws-cdk-lib": "^2.0.0",
-    "constructs": "^10.0.0"
-  },
-  "peerDependenciesMeta": {
-    "aws-cdk-lib": {
-      "optional": true
-    },
-    "constructs": {
-      "optional": true
-    }
   }
 }

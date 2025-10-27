@@ -8,6 +8,17 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Determine if we're running from the package or from a user's project
+if [ -n "$AWS_WORKFLOW_PACKAGE_ROOT" ]; then
+  # Running from user's project via npx
+  PACKAGE_ROOT="$AWS_WORKFLOW_PACKAGE_ROOT"
+  PROJECT_ROOT="$(pwd)"
+else
+  # Running from within the package (development mode)
+  PACKAGE_ROOT="$(pwd)"
+  PROJECT_ROOT="$PACKAGE_ROOT/examples/nextjs-example"
+fi
+
 # Default values
 REGION=${AWS_REGION:-us-east-1}
 STACK_NAME="WorkflowStack"
@@ -111,11 +122,25 @@ echo -e "${GREEN}✓ AWS CLI $(aws --version | cut -d' ' -f1)${NC}"
 echo ""
 # Note: AWS CDK will be available via pnpm (installed as dependency)
 
+# Get AWS credentials from environment if set
+if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+  export AWS_ACCESS_KEY_ID
+  export AWS_SECRET_ACCESS_KEY
+fi
+
+# Ensure AWS_REGION is exported
+export AWS_REGION=$REGION
+
 # Check AWS credentials
 echo -e "${BLUE}🔐 Checking AWS credentials...${NC}"
+if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+  echo -e "${GREEN}✓ Using AWS credentials from environment variables${NC}"
+fi
+
 if ! aws sts get-caller-identity &> /dev/null; then
     echo -e "${RED}✗ AWS credentials not configured${NC}"
-    echo "  Please run: aws configure"
+    echo "  Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables,"
+    echo "  or run 'aws configure' to set up credentials."
     exit 1
 fi
 
@@ -126,16 +151,65 @@ echo -e "${GREEN}✓ Stack Name: $STACK_NAME${NC}"
 
 echo ""
 
-# Install dependencies
-echo -e "${BLUE}📦 Installing dependencies...${NC}"
-pnpm install
+# Compile aws-workflow package TypeScript if needed
+echo -e "${BLUE}📦 Compiling aws-workflow package...${NC}"
+cd "$PACKAGE_ROOT"
+if [ ! -d "dist" ] || [ ! -f "dist/bin/aws-workflow.js" ]; then
+  echo "   Compiling TypeScript..."
+  pnpm tsc --build
+else
+  echo "   ✓ Already compiled"
+fi
 
 echo ""
 
-# Build TypeScript
-echo -e "${BLUE}🔨 Building TypeScript...${NC}"
-pnpm build
+# Create placeholder Lambda bundle for initial deployment
+echo -e "${BLUE}📦 Creating placeholder Lambda bundle...${NC}"
+rm -rf cdk.out/lambda-bundle
+mkdir -p cdk.out/lambda-bundle/.well-known/workflow/v1/flow
+mkdir -p cdk.out/lambda-bundle/.well-known/workflow/v1/step
 
+# Create placeholder handler
+cat > cdk.out/lambda-bundle/index.js << 'EOF'
+exports.handler = async (event) => {
+  console.log('Placeholder handler - deploy your workflows with: npx aws-workflow deploy');
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: 'Placeholder - run npx aws-workflow deploy' })
+  };
+};
+EOF
+
+# Create placeholder route handlers
+cat > cdk.out/lambda-bundle/.well-known/workflow/v1/flow/route.js << 'EOF'
+export const POST = async (request) => {
+  return new Response(JSON.stringify({ error: 'Placeholder - run npx aws-workflow deploy' }), {
+    status: 503,
+    headers: { 'Content-Type': 'application/json' }
+  });
+};
+EOF
+
+cat > cdk.out/lambda-bundle/.well-known/workflow/v1/step/route.js << 'EOF'
+export const POST = async (request) => {
+  return new Response(JSON.stringify({ error: 'Placeholder - run npx aws-workflow deploy' }), {
+    status: 503,
+    headers: { 'Content-Type': 'application/json' }
+  });
+};
+EOF
+
+# Create minimal package.json
+cat > cdk.out/lambda-bundle/package.json << 'EOF'
+{
+  "name": "workflow-lambda-worker",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js"
+}
+EOF
+
+echo "   ✓ Placeholder bundle created"
 echo ""
 
 # Deploy infrastructure
@@ -159,14 +233,9 @@ else
     echo ""
 fi
 
-# Build Lambda bundle (Next.js workflows + Lambda handler)
-echo -e "${BLUE}📦 Building Lambda bundle...${NC}"
-./scripts/build.sh
-
-echo ""
-
 # Bootstrap CDK (if needed)
 echo -e "${BLUE}🚀 Bootstrapping AWS CDK...${NC}"
+cd "$PACKAGE_ROOT"
 if command -v cdk &> /dev/null; then
     cdk bootstrap aws://$AWS_ACCOUNT/$REGION
 else
@@ -175,8 +244,9 @@ fi
 
 echo ""
 
-# Deploy with CDK
-echo "🚀 Deploying CloudFormation stack..."
+# Deploy with CDK (infrastructure only)
+echo "🚀 Deploying CloudFormation stack (infrastructure only)..."
+cd "$PACKAGE_ROOT"
 if command -v cdk &> /dev/null; then
     npx cdk deploy --require-approval never
 else
@@ -187,11 +257,12 @@ echo ""
 
 # Get outputs
 echo -e "${BLUE}📋 Extracting deployment outputs...${NC}"
-AWS_REGION=$REGION ./scripts/outputs.sh "workflow-dev" > .env.aws
+cd "$PROJECT_ROOT"
+AWS_REGION=$REGION bash "$PACKAGE_ROOT/scripts/outputs.sh" "$STACK_NAME" > .env.aws
 
 # Display environment variables
 echo ""
-echo -e "${GREEN}✅ Bootstrap complete!${NC}"
+echo -e "${GREEN}✅ Infrastructure bootstrap complete!${NC}"
 echo ""
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║  Environment Variables                 ║${NC}"
@@ -207,12 +278,15 @@ echo -e "     ${BLUE}AWS_ACCESS_KEY_ID${NC}=your-access-key"
 echo -e "     ${BLUE}AWS_SECRET_ACCESS_KEY${NC}=your-secret-key"
 echo -e "     ${BLUE}AWS_REGION${NC}=${REGION}"
 echo ""
-echo -e "${GREEN}Next steps:${NC}"
-echo -e "  1. Copy ${BLUE}.env.aws${NC} variables to your Next.js ${BLUE}.env.local${NC}"
-echo -e "  2. Add AWS credentials to ${BLUE}.env.local${NC} (for local development)"
-echo -e "  3. Write your workflows in your Next.js app"
-echo -e "  4. When you update workflows: ${BLUE}npm run deploy${NC}"
+echo -e "${GREEN}✨ Next steps:${NC}"
 echo ""
-echo -e "${GREEN}✅ Your workflows are now deployed and ready to use!${NC}"
+echo -e "  1. Deploy your workflow code to Lambda:"
+echo -e "     ${BLUE}npx aws-workflow deploy${NC}"
+echo ""
+echo -e "  2. Test your workflow locally:"
+echo -e "     ${BLUE}pnpm dev${NC}"
+echo ""
+echo -e "  3. View Lambda logs:"
+echo -e "     ${BLUE}npx aws-workflow logs${NC}"
 echo ""
 

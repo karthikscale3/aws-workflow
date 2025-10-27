@@ -8,6 +8,17 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Determine if we're running from the package or from a user's project
+if [ -n "$AWS_WORKFLOW_PACKAGE_ROOT" ]; then
+  # Running from user's project via npx
+  PACKAGE_ROOT="$AWS_WORKFLOW_PACKAGE_ROOT"
+  PROJECT_ROOT="$(pwd)"
+else
+  # Running from within the package (development mode)
+  PACKAGE_ROOT="$(pwd)"
+  PROJECT_ROOT="$PACKAGE_ROOT/examples/nextjs-example"
+fi
+
 # Default values
 REGION=""
 
@@ -54,22 +65,23 @@ fi
 echo -e "${GREEN}✓ AWS Region: $AWS_REGION${NC}"
 echo ""
 
-# Check if Next.js example directory exists
-if [ ! -d "examples/nextjs-example" ]; then
-    echo -e "${RED}✗ Next.js example directory not found${NC}"
+# Check if Next.js project directory exists
+if [ ! -d "$PROJECT_ROOT" ]; then
+    echo -e "${RED}✗ Next.js project directory not found: $PROJECT_ROOT${NC}"
     echo "  This script must be run from the aws-workflow directory"
     exit 1
 fi
 
 # Build everything (Next.js + Lambda packages)
 echo -e "${BLUE}📦 Building Lambda packages...${NC}"
-./scripts/build.sh
+bash "$PACKAGE_ROOT/scripts/build.sh"
 
 # Deploy with CDK (using pre-built bundle)
 echo -e "${BLUE}🚀 Deploying to Lambda with CDK...${NC}"
 echo ""
 
 # Use npx to run CDK (works even if CDK not globally installed)
+cd "$PACKAGE_ROOT"
 npx cdk deploy \
     --region $AWS_REGION \
     --require-approval never \

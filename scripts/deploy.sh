@@ -8,27 +8,20 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Determine if we're running from within the package or from a user's Next.js app
-if [ -f "package.json" ] && grep -q "aws-workflow" package.json 2>/dev/null; then
-  # Running from user's Next.js app
-  NEXTJS_DIR=$(pwd)
-  if [ -d "node_modules/aws-workflow" ]; then
-    AWS_WORKFLOW_DIR="node_modules/aws-workflow"
-  else
-    echo -e "${RED}✗ aws-workflow package not found in node_modules${NC}"
-    echo "  Please run: npm install aws-workflow"
-    exit 1
-  fi
+# Determine if we're running from the package or from a user's project
+if [ -n "$AWS_WORKFLOW_PACKAGE_ROOT" ]; then
+  # Running from user's project via npx
+  PACKAGE_ROOT="$AWS_WORKFLOW_PACKAGE_ROOT"
+  PROJECT_ROOT="$(pwd)"
 else
-  # Running from within aws-workflow package (development mode)
-  AWS_WORKFLOW_DIR=$(cd "$(dirname "$0")/.." && pwd)
-  if [ -d "$AWS_WORKFLOW_DIR/examples/nextjs-example" ]; then
-    NEXTJS_DIR="$AWS_WORKFLOW_DIR/examples/nextjs-example"
-  else
-    echo -e "${RED}✗ Could not determine Next.js directory${NC}"
-    exit 1
-  fi
+  # Running from within the package (development mode)
+  PACKAGE_ROOT="$(pwd)"
+  PROJECT_ROOT="$PACKAGE_ROOT/examples/nextjs-example"
 fi
+
+# For backwards compatibility
+AWS_WORKFLOW_DIR="$PACKAGE_ROOT"
+NEXTJS_DIR="$PROJECT_ROOT"
 
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║  Deploy Workflows to AWS Lambda        ║${NC}"
@@ -52,14 +45,28 @@ if ! command -v aws &> /dev/null; then
 fi
 echo -e "${GREEN}✓ AWS CLI${NC}"
 
+# Get AWS region from environment or AWS CLI config
+if [ -z "$AWS_REGION" ]; then
+  AWS_REGION=$(aws configure get region || echo "us-east-1")
+fi
+export AWS_REGION
+
+# Get AWS credentials from environment if set
+if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+  echo -e "${GREEN}✓ Using AWS credentials from environment variables${NC}"
+  export AWS_ACCESS_KEY_ID
+  export AWS_SECRET_ACCESS_KEY
+fi
+
 # Check AWS credentials
 if ! aws sts get-caller-identity &> /dev/null; then
     echo -e "${RED}✗ AWS credentials not configured${NC}"
+    echo "  Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables,"
+    echo "  or run 'aws configure' to set up credentials."
     exit 1
 fi
 
 AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-AWS_REGION=$(aws configure get region || echo "us-east-1")
 echo -e "${GREEN}✓ AWS Account: $AWS_ACCOUNT${NC}"
 echo -e "${GREEN}✓ AWS Region: $AWS_REGION${NC}"
 echo ""

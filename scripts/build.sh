@@ -4,10 +4,22 @@ set -e
 echo "🔨 Building Lambda deployment package with Docker bundling..."
 echo ""
 
+# Determine if we're running from the package or from a user's project
+if [ -n "$AWS_WORKFLOW_PACKAGE_ROOT" ]; then
+  # Running from user's project via npx
+  PACKAGE_ROOT="$AWS_WORKFLOW_PACKAGE_ROOT"
+  PROJECT_ROOT="$(pwd)"
+else
+  # Running from within the package (development mode)
+  PACKAGE_ROOT="$(pwd)"
+  PROJECT_ROOT="$PACKAGE_ROOT/examples/nextjs-example"
+fi
+
 # ============================================================================
 # STEP 0: Compile TypeScript (Lambda handler as ESM, world as CommonJS)
 # ============================================================================
 echo "📦 Step 0/3: Compiling TypeScript..."
+cd "$PACKAGE_ROOT"
 pnpm tsc --build
 echo "   Compiling Lambda handler as ESM..."
 pnpm tsc --project lambda/tsconfig.json
@@ -19,7 +31,7 @@ echo ""
 # ============================================================================
 echo "📦 Step 1/3: Building Next.js workflow bundles..."
 
-cd examples/nextjs-example
+cd "$PROJECT_ROOT"
 
 # IMPORTANT: Use npm instead of pnpm to avoid .pnpm path issues in generated route files
 if [ ! -f "package-lock.json" ]; then
@@ -37,7 +49,7 @@ export WORKFLOW_TARGET_WORLD=aws-workflow
 
 npm run build
 
-cd ../..
+cd "$PACKAGE_ROOT"
 
 echo "   ✓ Workflow bundles generated"
 echo ""
@@ -54,8 +66,8 @@ mkdir -p cdk.out/lambda-bundle
 echo "   Copying workflow routes..."
 mkdir -p cdk.out/lambda-bundle/.well-known/workflow/v1/flow
 mkdir -p cdk.out/lambda-bundle/.well-known/workflow/v1/step
-cp examples/nextjs-example/app/.well-known/workflow/v1/flow/route.js cdk.out/lambda-bundle/.well-known/workflow/v1/flow/
-cp examples/nextjs-example/app/.well-known/workflow/v1/step/route.js cdk.out/lambda-bundle/.well-known/workflow/v1/step/
+cp "$PROJECT_ROOT/app/.well-known/workflow/v1/flow/route.js" cdk.out/lambda-bundle/.well-known/workflow/v1/flow/
+cp "$PROJECT_ROOT/app/.well-known/workflow/v1/step/route.js" cdk.out/lambda-bundle/.well-known/workflow/v1/step/
 
 # Copy Lambda handler (from compiled dist directory) - now ESM
 echo "   Copying Lambda handler..."

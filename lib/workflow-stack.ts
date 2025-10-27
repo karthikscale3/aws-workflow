@@ -317,9 +317,15 @@ export class WorkflowStack extends cdk.Stack {
         NODE_OPTIONS: '--enable-source-maps',
       },
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: isProd
-        ? logs.RetentionDays.ONE_MONTH
-        : logs.RetentionDays.ONE_WEEK,
+      logGroup: new logs.LogGroup(this, 'WorkflowWorkerLogs', {
+        logGroupName: `/aws/lambda/${queuePrefix}-worker`,
+        retention: isProd
+          ? logs.RetentionDays.ONE_MONTH
+          : logs.RetentionDays.ONE_WEEK,
+        removalPolicy: isProd
+          ? cdk.RemovalPolicy.RETAIN
+          : cdk.RemovalPolicy.DESTROY,
+      }),
       reservedConcurrentExecutions:
         props.environment === 'dev' ? 10 : undefined,
     });

@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node --prefer-ts-exts bin/aws-workflow.ts",
+  "app": "node dist/bin/aws-workflow.js",
   "watch": {
     "include": ["**"],
     "exclude": [
@@ -66,4 +66,3 @@
     "@aws-cdk/aws-s3:keepNotificationInImportedBucket": false
   }
 }
-

@@ -1,13 +1,10 @@
 #!/usr/bin/env node
-// @ts-nocheck - This file is executed directly by Node.js, not compiled by TypeScript
 
-import { execSync } from 'child_process';
-import { existsSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+const { execSync } = require('child_process');
+const { existsSync } = require('fs');
+const { join } = require('path');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// __dirname is available in CommonJS by default
 
 const commands = {
   bootstrap: {
@@ -86,7 +83,8 @@ function runCommand(command: string) {
   }
 
   // Find the script in the package
-  const packageRoot = join(__dirname, '..');
+  // __dirname is dist/bin/, so go up two levels to reach package root
+  const packageRoot = join(__dirname, '..', '..');
   const scriptPath = join(packageRoot, 'scripts', cmd.script!);
 
   if (!existsSync(scriptPath)) {
@@ -101,15 +99,18 @@ function runCommand(command: string) {
     // Ignore errors on chmod (may not have permission)
   }
 
-  // Run the script
+  // Run the script from the user's current directory
+  // Pass the package root so scripts can reference CDK files
   try {
     execSync(scriptPath, {
       stdio: 'inherit',
-      cwd: packageRoot,
+      cwd: process.cwd(), // User's project directory
       env: {
         ...process.env,
         // Ensure AWS region is set
         AWS_REGION: process.env.AWS_REGION || 'us-east-1',
+        // Pass package root to scripts
+        AWS_WORKFLOW_PACKAGE_ROOT: packageRoot,
       },
     });
   } catch (error) {

@@ -9,7 +9,7 @@ NC='\033[0m' # No Color
 
 # Default values
 REGION=${AWS_REGION:-us-east-1}
-STACK_NAME="workflow-dev"
+STACK_NAME="WorkflowStack"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -27,7 +27,7 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Options:"
       echo "  --region REGION        AWS region (default: us-east-1)"
-      echo "  --stack-name NAME      CloudFormation stack name (default: workflow-dev)"
+      echo "  --stack-name NAME      CloudFormation stack name (default: WorkflowStack)"
       echo "  -h, --help             Show this help message"
       exit 0
       ;;
