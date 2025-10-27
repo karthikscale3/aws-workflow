@@ -59,8 +59,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/langtrace/workflows.git",
-    "directory": "aws-workflow"
+    "url": "https://github.com/karthikscale3/aws-workflow.git"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.515.0",
