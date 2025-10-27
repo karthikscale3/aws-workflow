@@ -1,6 +1,6 @@
 {
   "name": "aws-workflow",
-  "version": "0.1.0-beta.14",
+  "version": "0.1.0-beta.17",
   "description": "AWS World implementation for Workflow DevKit - Run durable workflows on AWS Lambda with DynamoDB, SQS, and S3",
   "main": "./dist/world/index.js",
   "types": "./dist/world/index.d.ts",
@@ -62,10 +62,10 @@
     "url": "https://github.com/karthikscale3/aws-workflow.git"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.515.0",
-    "@aws-sdk/client-s3": "^3.515.0",
-    "@aws-sdk/client-sqs": "^3.515.0",
-    "@aws-sdk/lib-dynamodb": "^3.515.0",
+    "@aws-sdk/client-dynamodb": "^3.523.0",
+    "@aws-sdk/client-s3": "^3.523.0",
+    "@aws-sdk/client-sqs": "^3.523.0",
+    "@aws-sdk/lib-dynamodb": "^3.523.0",
     "@workflow/world": "^4.0.1-beta.1",
     "@workflow/errors": "^4.0.1-beta.1",
     "@workflow/world-local": "^4.0.1-beta.1",

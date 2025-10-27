@@ -20,19 +20,23 @@ else
 fi
 
 # Default values
-REGION=${AWS_REGION:-us-east-1}
-STACK_NAME="WorkflowStack"
+REGION=""
+STACK_NAME=""
 SKIP_CONFIRM=false
+REGION_FROM_CLI=false
+STACK_FROM_CLI=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
     --region)
       REGION="$2"
+      REGION_FROM_CLI=true
       shift 2
       ;;
     --stack-name)
       STACK_NAME="$2"
+      STACK_FROM_CLI=true
       shift 2
       ;;
     -y|--yes)
@@ -43,15 +47,15 @@ while [[ $# -gt 0 ]]; do
       echo "Usage: $0 [OPTIONS]"
       echo ""
       echo "Options:"
-      echo "  --region REGION        AWS region (default: us-east-1)"
-      echo "  --stack-name NAME      CloudFormation stack name (default: WorkflowStack)"
+      echo "  --region REGION        AWS region (default: interactive prompt)"
+      echo "  --stack-name NAME      CloudFormation stack name (default: interactive prompt)"
       echo "  -y, --yes              Skip confirmation prompts"
       echo "  -h, --help             Show this help message"
       echo ""
       echo "Examples:"
-      echo "  $0                                    # Use defaults"
-      echo "  $0 --region us-west-2                 # Deploy to us-west-2"
-      echo "  $0 --region eu-west-1 -y              # Deploy to EU with no prompts"
+      echo "  $0                                    # Interactive mode"
+      echo "  $0 --region us-west-2                 # Specify region, prompt for stack name"
+      echo "  $0 --region eu-west-1 --stack-name MyStack -y   # Non-interactive"
       exit 0
       ;;
     *)
@@ -61,8 +65,6 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-
-export AWS_REGION=$REGION
 
 echo ""
 echo -e "${BLUE}                        ■                        ${NC}"
@@ -86,6 +88,46 @@ echo ""
 echo -e "${BLUE}    ═══════════════════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}                        Bootstrap Script v1.0                        ${NC}"
 echo -e "${BLUE}    ═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+
+# Interactive prompts for configuration
+echo -e "${BLUE}📋 Configuration${NC}"
+echo ""
+
+# Prompt for region if not provided via CLI
+if [ "$REGION_FROM_CLI" = false ]; then
+  # Try to get from environment or AWS CLI
+  if [ -z "$REGION" ]; then
+    REGION=${AWS_REGION:-$(aws configure get region 2>/dev/null)}
+  fi
+  
+  if [ -n "$REGION" ]; then
+    echo -e "Current AWS region: ${GREEN}$REGION${NC}"
+    read -p "Press Enter to use this region, or type a new one: " user_region
+    if [ -n "$user_region" ]; then
+      REGION="$user_region"
+    fi
+  else
+    read -p "Enter AWS region (e.g., us-east-1, us-west-2, eu-west-1): " user_region
+    REGION=${user_region:-us-east-1}
+  fi
+  echo ""
+fi
+
+# Prompt for stack name if not provided via CLI
+if [ "$STACK_FROM_CLI" = false ]; then
+  echo "Enter a name for your CloudFormation stack"
+  echo "(This will be used to identify your AWS resources)"
+  read -p "Stack name (default: WorkflowStack): " user_stack
+  STACK_NAME=${user_stack:-WorkflowStack}
+  echo ""
+fi
+
+export AWS_REGION=$REGION
+
+echo -e "${GREEN}✓ Configuration set:${NC}"
+echo -e "  Region: ${BLUE}$REGION${NC}"
+echo -e "  Stack Name: ${BLUE}$STACK_NAME${NC}"
 echo ""
 
 # Check prerequisites
@@ -122,25 +164,67 @@ echo -e "${GREEN}✓ AWS CLI $(aws --version | cut -d' ' -f1)${NC}"
 echo ""
 # Note: AWS CDK will be available via pnpm (installed as dependency)
 
-# Get AWS credentials from environment if set
-if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-  export AWS_ACCESS_KEY_ID
-  export AWS_SECRET_ACCESS_KEY
-fi
-
-# Ensure AWS_REGION is exported
-export AWS_REGION=$REGION
-
 # Check AWS credentials
 echo -e "${BLUE}🔐 Checking AWS credentials...${NC}"
+
+# Check if AWS credentials are available
+CREDS_AVAILABLE=false
+
+# Check environment variables
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-  echo -e "${GREEN}✓ Using AWS credentials from environment variables${NC}"
+  echo -e "${GREEN}✓ Found AWS credentials in environment variables${NC}"
+  export AWS_ACCESS_KEY_ID
+  export AWS_SECRET_ACCESS_KEY
+  CREDS_AVAILABLE=true
 fi
 
+# Check if AWS CLI is configured
+if [ "$CREDS_AVAILABLE" = false ]; then
+  if aws sts get-caller-identity &> /dev/null; then
+    echo -e "${GREEN}✓ Found AWS credentials in AWS CLI config${NC}"
+    CREDS_AVAILABLE=true
+  fi
+fi
+
+# Exit with instructions if credentials not available
+if [ "$CREDS_AVAILABLE" = false ]; then
+  echo -e "${RED}✗ AWS credentials not configured${NC}"
+  echo ""
+  echo -e "${YELLOW}Please configure AWS credentials before running bootstrap.${NC}"
+  echo ""
+  echo "Choose one of the following methods:"
+  echo ""
+  echo -e "${BLUE}Option 1: Configure AWS CLI (Recommended)${NC}"
+  echo "  Run the following command and follow the prompts:"
+  echo -e "    ${GREEN}aws configure${NC}"
+  echo ""
+  echo "  You'll be asked for:"
+  echo "    • AWS Access Key ID"
+  echo "    • AWS Secret Access Key"
+  echo "    • Default region (e.g., $REGION)"
+  echo "    • Default output format (press Enter for default)"
+  echo ""
+  echo -e "${BLUE}Option 2: Set Environment Variables${NC}"
+  echo "  Export your credentials in the terminal:"
+  echo -e "    ${GREEN}export AWS_ACCESS_KEY_ID=\"your-access-key-id\"${NC}"
+  echo -e "    ${GREEN}export AWS_SECRET_ACCESS_KEY=\"your-secret-access-key\"${NC}"
+  echo -e "    ${GREEN}export AWS_REGION=\"$REGION\"${NC}"
+  echo ""
+  echo "  Then run this bootstrap script again."
+  echo ""
+  echo -e "${BLUE}How to get AWS credentials:${NC}"
+  echo "  1. Log in to AWS Console: https://console.aws.amazon.com/"
+  echo "  2. Go to IAM → Users → Your User → Security Credentials"
+  echo "  3. Click 'Create access key'"
+  echo "  4. Download and save your credentials"
+  echo ""
+  exit 1
+fi
+
+# Verify credentials work
+echo ""
 if ! aws sts get-caller-identity &> /dev/null; then
-    echo -e "${RED}✗ AWS credentials not configured${NC}"
-    echo "  Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables,"
-    echo "  or run 'aws configure' to set up credentials."
+    echo -e "${RED}✗ AWS credentials are invalid or insufficient permissions${NC}"
     exit 1
 fi
 

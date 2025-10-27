@@ -47,22 +47,78 @@ echo -e "${GREEN}✓ AWS CLI${NC}"
 
 # Get AWS region from environment or AWS CLI config
 if [ -z "$AWS_REGION" ]; then
-  AWS_REGION=$(aws configure get region || echo "us-east-1")
+  AWS_REGION=$(aws configure get region 2>/dev/null)
+fi
+
+# Prompt for region if not set
+if [ -z "$AWS_REGION" ]; then
+  echo -e "${YELLOW}⚠️  AWS_REGION not set${NC}"
+  echo ""
+  read -p "Enter AWS region (default: us-east-1): " user_region
+  AWS_REGION=${user_region:-us-east-1}
+  echo ""
 fi
 export AWS_REGION
 
-# Get AWS credentials from environment if set
+# Check if AWS credentials are available
+CREDS_AVAILABLE=false
+
+# Check environment variables
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
   echo -e "${GREEN}✓ Using AWS credentials from environment variables${NC}"
   export AWS_ACCESS_KEY_ID
   export AWS_SECRET_ACCESS_KEY
+  CREDS_AVAILABLE=true
 fi
 
-# Check AWS credentials
-if ! aws sts get-caller-identity &> /dev/null; then
-    echo -e "${RED}✗ AWS credentials not configured${NC}"
-    echo "  Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables,"
+# Check if AWS CLI is configured
+if [ "$CREDS_AVAILABLE" = false ]; then
+  if aws sts get-caller-identity &> /dev/null; then
+    echo -e "${GREEN}✓ Using AWS credentials from AWS CLI config${NC}"
+    CREDS_AVAILABLE=true
+  fi
+fi
+
+# Prompt for credentials if not available
+if [ "$CREDS_AVAILABLE" = false ]; then
+  echo -e "${YELLOW}⚠️  AWS credentials not configured${NC}"
+  echo ""
+  echo "You can either:"
+  echo "  1. Enter credentials now"
+  echo "  2. Configure AWS CLI (run 'aws configure' in another terminal)"
+  echo ""
+  read -p "Would you like to enter credentials now? (y/N): " -n 1 -r
+  echo ""
+  
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo ""
+    read -p "Enter AWS_ACCESS_KEY_ID: " input_access_key
+    read -sp "Enter AWS_SECRET_ACCESS_KEY: " input_secret_key
+    echo ""
+    echo ""
+    
+    if [ -n "$input_access_key" ] && [ -n "$input_secret_key" ]; then
+      export AWS_ACCESS_KEY_ID="$input_access_key"
+      export AWS_SECRET_ACCESS_KEY="$input_secret_key"
+      echo -e "${GREEN}✓ Credentials set${NC}"
+      CREDS_AVAILABLE=true
+    else
+      echo -e "${RED}✗ Invalid credentials${NC}"
+      exit 1
+    fi
+  else
+    echo -e "${RED}✗ Cannot proceed without AWS credentials${NC}"
+    echo "  Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables,"
     echo "  or run 'aws configure' to set up credentials."
+    exit 1
+  fi
+fi
+
+# Verify credentials work
+echo ""
+echo -e "${BLUE}🔐 Verifying AWS credentials...${NC}"
+if ! aws sts get-caller-identity &> /dev/null; then
+    echo -e "${RED}✗ AWS credentials are invalid or insufficient permissions${NC}"
     exit 1
 fi
 
@@ -70,6 +126,68 @@ AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 echo -e "${GREEN}✓ AWS Account: $AWS_ACCOUNT${NC}"
 echo -e "${GREEN}✓ AWS Region: $AWS_REGION${NC}"
 echo ""
+
+# Check if .env.aws exists and warn user about environment variables
+if [ -f "$PROJECT_ROOT/.env.aws" ]; then
+  echo -e "${BLUE}📋 Checking workflow environment variables...${NC}"
+  
+  # Check if key environment variables are set
+  MISSING_VARS=()
+  
+  # Read required variables from .env.aws
+  while IFS='=' read -r key value; do
+    # Skip comments and empty lines
+    [[ "$key" =~ ^#.*$ ]] && continue
+    [[ -z "$key" ]] && continue
+    
+    # Check if this variable is set in current environment
+    if [ -z "${!key}" ]; then
+      MISSING_VARS+=("$key")
+    fi
+  done < "$PROJECT_ROOT/.env.aws"
+  
+  if [ ${#MISSING_VARS[@]} -gt 0 ]; then
+    echo -e "${YELLOW}⚠️  Warning: Workflow environment variables not set!${NC}"
+    echo ""
+    echo "The following variables from .env.aws are not in your environment:"
+    for var in "${MISSING_VARS[@]}"; do
+      echo "  - $var"
+    done
+    echo ""
+    echo -e "${YELLOW}These variables are needed for your Next.js app to connect to AWS resources.${NC}"
+    echo ""
+    echo "To fix this:"
+    echo "  1. Copy variables from .env.aws to your Next.js .env.local file:"
+    echo -e "     ${BLUE}cat .env.aws >> .env.local${NC}"
+    echo ""
+    echo "  2. Or source them for this session:"
+    echo -e "     ${BLUE}source .env.aws${NC}"
+    echo ""
+    read -p "Continue deployment anyway? (y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      echo -e "${YELLOW}Deployment cancelled. Please set up environment variables first.${NC}"
+      exit 0
+    fi
+    echo ""
+  else
+    echo -e "${GREEN}✓ Workflow environment variables are set${NC}"
+    echo ""
+  fi
+else
+  echo -e "${YELLOW}⚠️  .env.aws file not found${NC}"
+  echo ""
+  echo "It looks like you haven't run 'npx aws-workflow bootstrap' yet,"
+  echo "or you're running this from a different directory."
+  echo ""
+  read -p "Continue deployment anyway? (y/N): " -n 1 -r
+  echo ""
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo -e "${YELLOW}Deployment cancelled.${NC}"
+    exit 0
+  fi
+  echo ""
+fi
 
 # Step 1: Compile TypeScript in aws-workflow package
 echo -e "${BLUE}📦 Step 1/3: Compiling aws-workflow package...${NC}"
