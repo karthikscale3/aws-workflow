@@ -1,0 +1,52 @@
+# Source files
+*.ts
+!*.d.ts
+
+# Tests
+test/
+*.test.ts
+*.spec.ts
+
+# Build artifacts
+*.tgz
+cdk.out/
+.cdk.staging/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules/
+
+# Documentation (keep main README)
+*.md
+!README.md
+
+# Config
+.eslintrc.json
+.prettierrc
+.editorconfig
+
+# Git
+.git/
+.gitignore
+
+# Misc
+.env
+.env.*
+

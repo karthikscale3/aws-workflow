@@ -1,0 +1,100 @@
+{
+  "name": "aws-workflow",
+  "version": "0.1.0-beta.1",
+  "description": "AWS World implementation for Workflow DevKit - Run durable workflows on AWS Lambda with DynamoDB, SQS, and S3",
+  "main": "./dist/world/index.js",
+  "types": "./dist/world/index.d.ts",
+  "bin": {
+    "aws-workflow": "./dist/bin/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/world/index.d.ts",
+      "default": "./dist/world/index.js"
+    },
+    "./cdk": {
+      "types": "./dist/cdk/index.d.ts",
+      "default": "./dist/cdk/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "scripts",
+    "lib",
+    "lambda",
+    "world",
+    "src",
+    "tsconfig.json",
+    "cdk.json",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "bootstrap": "./scripts/bootstrap.sh",
+    "deploy": "./scripts/deploy.sh",
+    "teardown": "./scripts/teardown.sh",
+    "logs": "aws logs tail /aws/lambda/workflow-worker --since 5m --region ${AWS_REGION:-us-east-1} --follow",
+    "outputs": "./scripts/outputs.sh"
+  },
+  "keywords": [
+    "workflow",
+    "workflow-devkit",
+    "aws",
+    "lambda",
+    "serverless",
+    "durable-execution",
+    "orchestration",
+    "state-machine",
+    "dynamodb",
+    "sqs",
+    "s3",
+    "nextjs",
+    "typescript"
+  ],
+  "author": "Langtrace",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/langtrace/workflows.git",
+    "directory": "aws-workflow"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.515.0",
+    "@aws-sdk/client-s3": "^3.515.0",
+    "@aws-sdk/client-sqs": "^3.515.0",
+    "@aws-sdk/lib-dynamodb": "^3.515.0",
+    "@workflow/world": "^4.0.1-beta.1",
+    "@workflow/errors": "^4.0.1-beta.1",
+    "@workflow/world-local": "^4.0.1-beta.1",
+    "@vercel/queue": "0.0.0-alpha.24",
+    "commander": "^11.1.0",
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1",
+    "ulid": "^2.3.0",
+    "ms": "^2.1.3",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "aws-cdk-lib": "^2.138.0",
+    "constructs": "^10.3.0",
+    "esbuild": "^0.19.0",
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
+    "aws-cdk-lib": "^2.0.0",
+    "constructs": "^10.0.0"
+  },
+  "peerDependenciesMeta": {
+    "aws-cdk-lib": {
+      "optional": true
+    },
+    "constructs": {
+      "optional": true
+    }
+  }
+}

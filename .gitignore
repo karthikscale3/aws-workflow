@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.pnpm-store/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# CDK outputs
+.cdk.staging/
+cdk.out/
+
+# Environment files
+.env
+.env.*
+!.env.example
+.env.sh
+.env.aws
+.env.local
+
+# Generated config (user-specific)
+world-config.json
+!world-config.example.json
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# AWS
+.aws-sam/
+
+# Package artifacts (for testing npm pack)
+*.tgz
