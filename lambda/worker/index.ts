@@ -1,4 +1,5 @@
 // @ts-nocheck - This file imports runtime-generated .js files
+import { ChangeMessageVisibilityCommand, SQSClient } from '@aws-sdk/client-sqs';
 import type { Context, SQSEvent, SQSRecord } from 'aws-lambda';
 
 // Import the compiled workflow entrypoints
@@ -23,9 +24,43 @@ export async function handler(event: SQSEvent, context: Context) {
     'messages'
   );
 
-  const results = await Promise.allSettled(
-    event.Records.map((record: SQSRecord) => processMessage(record))
+  // Process workflow messages sequentially to avoid VM context race conditions
+  // Steps can be processed in parallel since they don't use VM contexts
+  const workflowMessages: SQSRecord[] = [];
+  const stepMessages: SQSRecord[] = [];
+
+  for (const record of event.Records) {
+    const isWorkflowQueue = record.eventSourceARN?.includes('workflow-flows');
+    if (isWorkflowQueue) {
+      workflowMessages.push(record);
+    } else {
+      stepMessages.push(record);
+    }
+  }
+
+  console.log(
+    `📊 Batch breakdown: ${workflowMessages.length} workflows, ${stepMessages.length} steps`
   );
+
+  // Process steps in parallel (safe)
+  const stepResults = await Promise.allSettled(
+    stepMessages.map((record) => processMessage(record))
+  );
+
+  // Process workflows sequentially (prevents VM context conflicts)
+  const workflowResults: PromiseSettledResult<void>[] = [];
+  for (const record of workflowMessages) {
+    try {
+      await processMessage(record);
+      workflowResults.push({ status: 'fulfilled', value: undefined });
+    } catch (error) {
+      workflowResults.push({ status: 'rejected', reason: error });
+    }
+  }
+
+  // Combine results
+  const allRecords = [...stepMessages, ...workflowMessages];
+  const results = [...stepResults, ...workflowResults];
 
   // Return failed message IDs for partial batch failure
   const batchItemFailures = results
@@ -33,10 +68,10 @@ export async function handler(event: SQSEvent, context: Context) {
       if (result.status === 'rejected') {
         console.error(
           '❌ Failed to process message:',
-          event.Records[index].messageId,
+          allRecords[index].messageId,
           result.reason
         );
-        return { itemIdentifier: event.Records[index].messageId };
+        return { itemIdentifier: allRecords[index].messageId };
       }
       return null;
     })
@@ -108,6 +143,36 @@ async function processMessage(record: SQSRecord) {
       throw new Error(
         `Handler returned status ${response.status}: ${errorText}`
       );
+    }
+
+    // Parse possible directive from handler
+    let directive: any = null;
+    try {
+      const text = await response.text();
+      directive = text ? JSON.parse(text) : null;
+    } catch {}
+
+    if (
+      directive &&
+      typeof directive.timeoutSeconds === 'number' &&
+      !isWorkflowQueue
+    ) {
+      // For step retries, extend visibility so the message is re-delivered after delay
+      const sqs = new SQSClient({ region: process.env.AWS_REGION });
+      const timeout = Math.max(1, Math.min(43200, directive.timeoutSeconds));
+      console.log(
+        `⏳ Adjusting visibility for retry: ${timeout}s for message`,
+        record.messageId
+      );
+      await sqs.send(
+        new ChangeMessageVisibilityCommand({
+          QueueUrl: process.env.WORKFLOW_AWS_STEP_QUEUE_URL!,
+          ReceiptHandle: record.receiptHandle!,
+          VisibilityTimeout: timeout,
+        })
+      );
+      // Throw to mark partial failure so Lambda does not delete the message
+      throw new Error(`Retry scheduled in ${timeout}s`);
     }
 
     console.log('✅ Message processed successfully:', record.messageId);

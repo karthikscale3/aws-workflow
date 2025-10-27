@@ -10,9 +10,7 @@ import { createStreamer } from './streamer.js';
 
 export type { AWSWorldConfig } from './config.js';
 
-export function createWorld(
-  config: Partial<AWSWorldConfig> = {}
-): World & { start(): Promise<void> } {
+export function createWorld(config: Partial<AWSWorldConfig> = {}): World {
   const fullConfig: AWSWorldConfig = {
     ...getDefaultConfig(),
     ...config,
@@ -57,8 +55,5 @@ export function createWorld(
     ...storage,
     ...streamer,
     ...queue,
-    async start() {
-      await queue.start();
-    },
-  } as World & { start(): Promise<void> };
+  };
 }

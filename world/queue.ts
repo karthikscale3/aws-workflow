@@ -1,18 +1,11 @@
-import {
-  DeleteMessageCommand,
-  ReceiveMessageCommand,
-  SendMessageCommand,
-  type SQSClient,
-} from '@aws-sdk/client-sqs';
+import { SendMessageCommand, type SQSClient } from '@aws-sdk/client-sqs';
 import { JsonTransport } from '@vercel/queue';
 import {
   MessageId,
-  QueuePayloadSchema,
   type Queue,
   type QueuePrefix,
   type ValidQueueName,
 } from '@workflow/world';
-import { createEmbeddedWorld } from '@workflow/world-local';
 import { monotonicFactory } from 'ulid';
 import type { AWSWorldConfig } from './config.js';
 
@@ -26,13 +19,7 @@ function parseQueueName(queueName: ValidQueueName): [QueuePrefix, string] {
   throw new Error(`Invalid queue name format: ${queueName}`);
 }
 
-export function createQueue(
-  client: SQSClient,
-  config: AWSWorldConfig
-): Queue & { start(): Promise<void> } {
-  const port = process.env.PORT ? Number(process.env.PORT) : undefined;
-  const embeddedWorld = createEmbeddedWorld({ dataDir: undefined, port });
-
+export function createQueue(client: SQSClient, config: AWSWorldConfig): Queue {
   const transport = new JsonTransport();
   const generateMessageId = monotonicFactory();
 
@@ -41,17 +28,57 @@ export function createQueue(
     __wkf_step_: config.queues.step,
   } as const satisfies Record<QueuePrefix, string>;
 
-  const createQueueHandler = embeddedWorld.createQueueHandler;
-
   const getDeploymentId: Queue['getDeploymentId'] = async () => {
     return 'aws';
+  };
+
+  const createQueueHandler: Queue['createQueueHandler'] = (prefix, handler) => {
+    // Return a handler that directly invokes the user's handler
+    // This follows the same pattern as @workflow/world-vercel
+    return async (request) => {
+      try {
+        // Parse the message from the request body
+        const message = await request.json();
+
+        // Parse metadata from headers (matching Vercel Queue format)
+        const queueName = request.headers.get(
+          'x-vqs-queue-name'
+        ) as ValidQueueName;
+        const messageId = request.headers.get('x-vqs-message-id') || 'unknown';
+        const attempt = Number(
+          request.headers.get('x-vqs-message-attempt') || '1'
+        );
+
+        // Invoke the user's handler directly (no HTTP, no embedded world)
+        const result = await handler(message, {
+          queueName,
+          messageId: MessageId.parse(messageId),
+          attempt,
+        });
+
+        if (result && typeof result === 'object') {
+          return new Response(JSON.stringify(result), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      } catch (error) {
+        console.error('Queue handler error:', error);
+        return new Response(JSON.stringify({ error: String(error) }), {
+          status: 500,
+        });
+      }
+    };
   };
 
   const queue: Queue['queue'] = async (queue, message, opts) => {
     const [prefix, queueId] = parseQueueName(queue);
     const queueUrl = Queues[prefix];
-
-    console.log('🔍 Queueing message:', { queue, prefix, queueId, queueUrl });
 
     if (!queueUrl) {
       throw new Error(
@@ -63,12 +90,6 @@ export function createQueue(
 
     const body = transport.serialize(message);
     const messageId = MessageId.parse(`msg_${generateMessageId()}`);
-
-    console.log('📤 Sending to SQS:', {
-      queueUrl,
-      messageId,
-      isFifo: queueUrl.endsWith('.fifo'),
-    });
 
     // Convert Buffer to base64 to avoid JSON serialization issues
     const dataBase64 = body.toString('base64');
@@ -93,114 +114,12 @@ export function createQueue(
       })
     );
 
-    console.log('✅ Message queued successfully');
     return { messageId };
   };
-
-  let isStarted = false;
-  let shouldStop = false;
-
-  async function pollQueue(queueUrl: string, queuePrefix: QueuePrefix) {
-    while (!shouldStop) {
-      try {
-        const response = await client.send(
-          new ReceiveMessageCommand({
-            QueueUrl: queueUrl,
-            MaxNumberOfMessages: 1,
-            WaitTimeSeconds: 20, // Long polling
-            VisibilityTimeout: 300, // 5 minutes
-          })
-        );
-
-        if (!response.Messages || response.Messages.length === 0) {
-          continue;
-        }
-
-        for (const message of response.Messages) {
-          if (!message.Body || !message.ReceiptHandle) continue;
-
-          try {
-            const body = JSON.parse(message.Body);
-            const payload = QueuePayloadSchema.parse(
-              transport.deserialize(body.data)
-            );
-
-            // Create a queue name to pass to the embedded world
-            const queueName: ValidQueueName = `${queuePrefix}${body.id}`;
-
-            // Use the embedded world's queue handler
-            const handler = createQueueHandler(
-              queuePrefix,
-              async (msg, meta) => {
-                // The embedded world will handle the actual workflow/step execution
-              }
-            );
-
-            // Make an HTTP request to the embedded world
-            const request = new Request(
-              `http://localhost:${port || 3000}/.well-known/workflow/v1/${
-                queuePrefix === '__wkf_workflow_' ? 'flow' : 'step'
-              }`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  message: payload,
-                  meta: {
-                    attempt: body.attempt || 1,
-                    queueName,
-                    messageId: body.messageId,
-                  },
-                }),
-              }
-            );
-
-            const response = await handler(request);
-
-            if (response.status === 200) {
-              // Delete message from queue on success
-              await client.send(
-                new DeleteMessageCommand({
-                  QueueUrl: queueUrl,
-                  ReceiptHandle: message.ReceiptHandle,
-                })
-              );
-            } else {
-              // Message will become visible again after visibility timeout
-              console.error(`Queue handler returned status ${response.status}`);
-            }
-          } catch (error) {
-            console.error('Error processing message:', error);
-            // Message will become visible again after visibility timeout
-          }
-        }
-      } catch (error) {
-        console.error('Error polling queue:', error);
-        // Wait a bit before retrying
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-      }
-    }
-  }
-
-  async function start() {
-    if (isStarted) return;
-    isStarted = true;
-    shouldStop = false;
-
-    // Start polling both queues
-    Promise.all([
-      pollQueue(Queues.__wkf_workflow_, '__wkf_workflow_'),
-      pollQueue(Queues.__wkf_step_, '__wkf_step_'),
-    ]).catch((error) => {
-      console.error('Queue polling error:', error);
-    });
-  }
 
   return {
     getDeploymentId,
     queue,
-    createQueueHandler:
-      createQueueHandler as unknown as Queue['createQueueHandler'],
-    start,
+    createQueueHandler,
   };
 }

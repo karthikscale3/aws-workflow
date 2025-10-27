@@ -221,7 +221,9 @@ function createStepsStorage(
 
   return {
     async create(runId, data): Promise<Step> {
-      const stepId = `step_${ulid()}`;
+      // Preserve runtime-provided stepId (correlationId) for deterministic replay
+      // Fallback to a new ULID if not provided
+      const stepId = (data as any).stepId ?? `step_${ulid()}`;
       const now = new Date().toISOString();
 
       const step: Step = {
@@ -235,12 +237,24 @@ function createStepsStorage(
         updatedAt: now as any,
       };
 
-      await client.send(
-        new PutCommand({
-          TableName: tableName,
-          Item: step,
-        })
-      );
+      // Ensure idempotency: don't overwrite if the step already exists
+      try {
+        await client.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: step,
+            ConditionExpression: 'attribute_not_exists(stepId)',
+          })
+        );
+      } catch (err: any) {
+        // ConditionalCheckFailedException → step already exists
+        if (err && err.name === 'ConditionalCheckFailedException') {
+          throw new WorkflowAPIError(`Step already exists: ${stepId}`, {
+            status: 409,
+          });
+        }
+        throw err;
+      }
 
       return step;
     },

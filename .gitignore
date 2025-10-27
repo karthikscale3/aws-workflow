@@ -11,6 +11,7 @@ dist/
 # CDK outputs
 .cdk.staging/
 cdk.out/
+cdk.out.deploy/
 
 # Environment files
 .env

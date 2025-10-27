@@ -1,19 +1,19 @@
-import { FatalError, sleep } from "workflow";
+import { FatalError, sleep } from 'workflow';
 
 export async function handleUserSignup(email: string) {
-  "use workflow";
+  'use workflow';
 
   const user = await createUser(email);
   await sendWelcomeEmail(user);
 
-  await sleep("5s"); // Pause for 5s - doesn't consume any resources
+  await sleep('1s'); // Pause for 1s - quick verification
   await sendOnboardingEmail(user);
 
-  return { userId: user.id, status: "onboarded" };
+  return { userId: user.id, status: 'onboarded' };
 }
 
 async function createUser(email: string) {
-  "use step";
+  'use step';
 
   console.log(`Creating user with email: ${email}`);
 
@@ -22,22 +22,22 @@ async function createUser(email: string) {
 }
 
 async function sendWelcomeEmail(user: { id: string; email: string }) {
-  "use step";
+  'use step';
 
   console.log(`Sending welcome email to user: ${user.id}`);
 
   if (Math.random() < 0.3) {
     // By default, steps will be retried for unhandled errors
-    throw new Error("Retryable!");
+    throw new Error('Retryable!');
   }
 }
 
 async function sendOnboardingEmail(user: { id: string; email: string }) {
-  "use step";
+  'use step';
 
-  if (!user.email.includes("@")) {
+  if (!user.email.includes('@')) {
     // To skip retrying, throw a FatalError instead
-    throw new FatalError("Invalid Email");
+    throw new FatalError('Invalid Email');
   }
 
   console.log(`Sending onboarding email to user: ${user.id}`);

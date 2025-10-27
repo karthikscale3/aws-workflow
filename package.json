@@ -1,6 +1,6 @@
 {
   "name": "aws-workflow",
-  "version": "0.1.0-beta.22",
+  "version": "0.1.0-beta.23",
   "description": "AWS World implementation for Workflow DevKit - Run durable workflows on AWS Lambda with DynamoDB, SQS, and S3",
   "main": "./dist/world/index.js",
   "types": "./dist/world/index.d.ts",
