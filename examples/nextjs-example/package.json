@@ -1,0 +1,37 @@
+{
+  "name": "supabase-workflow-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.523.0",
+    "@aws-sdk/client-s3": "^3.523.0",
+    "@aws-sdk/client-sqs": "^3.523.0",
+    "@aws-sdk/lib-dynamodb": "^3.523.0",
+    "@vercel/queue": "0.0.0-alpha.24",
+    "@workflow/errors": "4.0.1-beta.1",
+    "@workflow/world": "4.0.1-beta.1",
+    "aws-workflow": "file:../../",
+    "next": "16.0.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "ulid": "^3.0.1",
+    "workflow": "^4.0.1-beta.2",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
