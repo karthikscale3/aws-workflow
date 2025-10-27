@@ -331,4 +331,6 @@ Apache-2.0 - see [LICENSE.md](./LICENSE.md)
 
 Built with ❤️ by [Langtrace](https://langtrace.ai)
 
+**GitHub:** [https://github.com/karthikscale3/aws-workflow](https://github.com/karthikscale3/aws-workflow)
+
 **Part of the [Workflow DevKit](https://useworkflow.dev/) ecosystem**
