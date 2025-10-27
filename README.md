@@ -352,13 +352,10 @@ Check out the [example Next.js app](./examples/nextjs-example) for a complete im
 ## Documentation
 
 - [Workflow DevKit Docs](https://useworkflow.dev/docs)
-- [API Reference](./docs/API.md)
-- [Architecture Guide](./docs/ARCHITECTURE.md)
-- [Migration Guide](./docs/MIGRATION.md)
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](./CONTRIBUTING.md) first.
+Contributions are welcome!
 
 ## License
 
