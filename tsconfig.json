@@ -31,7 +31,6 @@
         "node_modules",
         "dist",
         "cdk.out",
-        "example",
-        "bin"
+        "examples"
     ]
 }
