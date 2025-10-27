@@ -331,6 +331,10 @@ echo ""
 # Deploy with CDK (infrastructure only)
 echo "🚀 Deploying CloudFormation stack (infrastructure only)..."
 cd "$PACKAGE_ROOT"
+
+# Export the stack name so it's available to the CDK app
+export STACK_NAME
+
 if command -v cdk &> /dev/null; then
     npx cdk deploy --require-approval never
 else
@@ -342,7 +346,18 @@ echo ""
 # Get outputs
 echo -e "${BLUE}📋 Extracting deployment outputs...${NC}"
 cd "$PROJECT_ROOT"
-AWS_REGION=$REGION bash "$PACKAGE_ROOT/scripts/outputs.sh" "$STACK_NAME" > .env.aws
+
+# Add stack name and region to .env.aws first
+echo "# AWS Workflow Configuration" > .env.aws
+echo "# Stack: $STACK_NAME" >> .env.aws
+echo "# Region: $REGION" >> .env.aws
+echo "" >> .env.aws
+echo "AWS_WORKFLOW_STACK_NAME=$STACK_NAME" >> .env.aws
+echo "AWS_REGION=$REGION" >> .env.aws
+echo "" >> .env.aws
+
+# Append CloudFormation outputs
+AWS_REGION=$REGION bash "$PACKAGE_ROOT/scripts/outputs.sh" "$STACK_NAME" >> .env.aws
 
 # Display environment variables
 echo ""

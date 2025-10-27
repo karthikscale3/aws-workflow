@@ -127,97 +127,44 @@ echo -e "${GREEN}✓ AWS Account: $AWS_ACCOUNT${NC}"
 echo -e "${GREEN}✓ AWS Region: $AWS_REGION${NC}"
 echo ""
 
-# Check if .env.aws exists and warn user about environment variables
+# Quick reminder about environment variables (informational only)
 if [ -f "$PROJECT_ROOT/.env.aws" ]; then
-  echo -e "${BLUE}📋 Checking workflow environment variables...${NC}"
-  
-  # Check if key environment variables are set
-  MISSING_VARS=()
-  
-  # Read required variables from .env.aws
-  while IFS='=' read -r key value; do
-    # Skip comments and empty lines
-    [[ "$key" =~ ^#.*$ ]] && continue
-    [[ -z "$key" ]] && continue
-    
-    # Check if this variable is set in current environment
-    if [ -z "${!key}" ]; then
-      MISSING_VARS+=("$key")
-    fi
-  done < "$PROJECT_ROOT/.env.aws"
-  
-  if [ ${#MISSING_VARS[@]} -gt 0 ]; then
-    echo -e "${YELLOW}⚠️  Warning: Workflow environment variables not set!${NC}"
-    echo ""
-    echo "The following variables from .env.aws are not in your environment:"
-    for var in "${MISSING_VARS[@]}"; do
-      echo "  - $var"
-    done
-    echo ""
-    echo -e "${YELLOW}These variables are needed for your Next.js app to connect to AWS resources.${NC}"
-    echo ""
-    echo "To fix this:"
-    echo "  1. Copy variables from .env.aws to your Next.js .env.local file:"
-    echo -e "     ${BLUE}cat .env.aws >> .env.local${NC}"
-    echo ""
-    echo "  2. Or source them for this session:"
-    echo -e "     ${BLUE}source .env.aws${NC}"
-    echo ""
-    read -p "Continue deployment anyway? (y/N): " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-      echo -e "${YELLOW}Deployment cancelled. Please set up environment variables first.${NC}"
-      exit 0
-    fi
-    echo ""
-  else
-    echo -e "${GREEN}✓ Workflow environment variables are set${NC}"
-    echo ""
-  fi
+  echo -e "${BLUE}📋 Environment setup reminder:${NC}"
+  echo -e "${GREEN}✓ Found .env.aws with AWS resource information${NC}"
+  echo ""
+  echo -e "💡 ${YELLOW}Make sure your Next.js app has access to these variables:${NC}"
+  echo "   - Copy .env.aws to .env.local: ${BLUE}cat .env.aws >> .env.local${NC}"
+  echo "   - Or use .env file (automatically loaded by Next.js)"
+  echo ""
 else
-  echo -e "${YELLOW}⚠️  .env.aws file not found${NC}"
-  echo ""
-  echo "It looks like you haven't run 'npx aws-workflow bootstrap' yet,"
-  echo "or you're running this from a different directory."
-  echo ""
-  read -p "Continue deployment anyway? (y/N): " -n 1 -r
-  echo ""
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "${YELLOW}Deployment cancelled.${NC}"
-    exit 0
-  fi
+  echo -e "${YELLOW}⚠️  No .env.aws file found${NC}"
+  echo "Run 'npx aws-workflow bootstrap' first to set up AWS infrastructure."
   echo ""
 fi
 
 # Step 1: Compile TypeScript in aws-workflow package
 echo -e "${BLUE}📦 Step 1/3: Compiling aws-workflow package...${NC}"
-cd "$AWS_WORKFLOW_DIR"
 
-# Check if we need to install dependencies
-if [ ! -d "node_modules" ]; then
-  echo "   Installing aws-workflow dependencies..."
-  if command -v pnpm &> /dev/null; then
-    pnpm install --prod
+# Check if package is already compiled (via npx it will be)
+if [ -f "$PACKAGE_ROOT/dist/world/index.js" ]; then
+  echo "   ✓ TypeScript compiled"
+else
+  # Only compile if we're in development mode
+  if [ -d "$PACKAGE_ROOT/node_modules" ]; then
+    cd "$PACKAGE_ROOT"
+    if command -v pnpm &> /dev/null; then
+      pnpm tsc --build
+      pnpm tsc --project lambda/tsconfig.json
+    else
+      npx tsc --build
+      npx tsc --project lambda/tsconfig.json
+    fi
+    cd "$PROJECT_ROOT"
+    echo "   ✓ TypeScript compiled"
   else
-    npm install --production
+    echo "   ✓ TypeScript compiled (package already built)"
   fi
 fi
-
-# Compile TypeScript
-if command -v pnpm &> /dev/null; then
-  pnpm tsc --build
-else
-  npx tsc --build
-fi
-
-# Compile Lambda handler as ESM
-if command -v pnpm &> /dev/null; then
-  pnpm tsc --project lambda/tsconfig.json
-else
-  npx tsc --project lambda/tsconfig.json
-fi
-
-echo "   ✓ TypeScript compiled"
 echo ""
 
 # Step 2: Build Next.js app to generate workflow bundles
@@ -257,8 +204,9 @@ echo ""
 
 # Step 3: Prepare Lambda bundle
 echo -e "${BLUE}📦 Step 3/3: Preparing Lambda bundle...${NC}"
-cd "$AWS_WORKFLOW_DIR"
+cd "$PROJECT_ROOT"
 
+# Create lambda bundle directory
 rm -rf cdk.out/lambda-bundle
 mkdir -p cdk.out/lambda-bundle
 
@@ -266,12 +214,12 @@ mkdir -p cdk.out/lambda-bundle
 echo "   Copying workflow routes..."
 mkdir -p cdk.out/lambda-bundle/.well-known/workflow/v1/flow
 mkdir -p cdk.out/lambda-bundle/.well-known/workflow/v1/step
-cp "$NEXTJS_DIR/app/.well-known/workflow/v1/flow/route.js" cdk.out/lambda-bundle/.well-known/workflow/v1/flow/
-cp "$NEXTJS_DIR/app/.well-known/workflow/v1/step/route.js" cdk.out/lambda-bundle/.well-known/workflow/v1/step/
+cp "$PROJECT_ROOT/app/.well-known/workflow/v1/flow/route.js" cdk.out/lambda-bundle/.well-known/workflow/v1/flow/
+cp "$PROJECT_ROOT/app/.well-known/workflow/v1/step/route.js" cdk.out/lambda-bundle/.well-known/workflow/v1/step/
 
 # Copy Lambda handler (compiled as ESM)
 echo "   Copying Lambda handler..."
-cp dist/lambda/worker/index.js cdk.out/lambda-bundle/index.js
+cp "$PACKAGE_ROOT/dist/lambda/worker/index.js" cdk.out/lambda-bundle/index.js
 
 # Create package.json (ESM for both handler and route files)
 echo "   Creating package.json..."
@@ -313,23 +261,23 @@ rm -rf node_modules/.cache
 
 # Bundle aws-workflow package AFTER npm install
 echo "   Bundling aws-workflow package..."
-mkdir -p node_modules/aws-workflow
-cd ../../
+cd "$PROJECT_ROOT"
+mkdir -p cdk.out/lambda-bundle/node_modules/aws-workflow
 
-# Bundle with esbuild
-npx esbuild dist/world/index.js \
+# Bundle with esbuild (use absolute paths)
+npx esbuild "$PACKAGE_ROOT/dist/world/index.js" \
   --bundle \
   --platform=node \
   --target=node20 \
   --format=cjs \
-  --outfile=cdk.out/lambda-bundle/node_modules/aws-workflow/index.js \
+  --outfile="$PROJECT_ROOT/cdk.out/lambda-bundle/node_modules/aws-workflow/index.js" \
   --external:@aws-sdk/* \
   --external:ulid \
   --external:ms \
   --external:zod
 
 # Create package.json for aws-workflow
-cat > cdk.out/lambda-bundle/node_modules/aws-workflow/package.json << 'EOF'
+cat > "$PROJECT_ROOT/cdk.out/lambda-bundle/node_modules/aws-workflow/package.json" << 'EOF'
 {
   "name": "aws-workflow",
   "type": "commonjs",
@@ -337,15 +285,31 @@ cat > cdk.out/lambda-bundle/node_modules/aws-workflow/package.json << 'EOF'
 }
 EOF
 
-BUNDLE_SIZE=$(du -sh cdk.out/lambda-bundle | cut -f1)
+BUNDLE_SIZE=$(du -sh "$PROJECT_ROOT/cdk.out/lambda-bundle" | cut -f1)
 echo "   ✓ Lambda bundle ready ($BUNDLE_SIZE)"
 echo ""
 
 # Deploy with CDK
 echo -e "${BLUE}🚀 Deploying to AWS Lambda...${NC}"
-npx cdk deploy \
-    --require-approval never \
-    --outputs-file cdk.out/outputs.json
+cd "$PROJECT_ROOT"
+
+# Read stack name from .env.aws if it exists
+if [ -f ".env.aws" ]; then
+  DETECTED_STACK_NAME=$(grep "^AWS_WORKFLOW_STACK_NAME=" .env.aws | cut -d'=' -f2)
+  if [ -n "$DETECTED_STACK_NAME" ]; then
+    STACK_NAME=${STACK_NAME:-$DETECTED_STACK_NAME}
+    echo "   Using stack: $STACK_NAME"
+  fi
+fi
+
+# Fallback to default if still not set
+STACK_NAME=${STACK_NAME:-WorkflowStack}
+export STACK_NAME
+export AWS_WORKFLOW_PACKAGE_ROOT="$PACKAGE_ROOT"
+
+npx --prefix "$PACKAGE_ROOT" cdk deploy \
+    --app "node $PACKAGE_ROOT/dist/bin/aws-workflow.js" \
+    --require-approval never
 
 echo ""
 echo -e "${BLUE}⏳ Waiting for Lambda update to complete...${NC}"

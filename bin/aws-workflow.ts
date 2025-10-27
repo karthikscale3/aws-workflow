@@ -15,7 +15,8 @@ const stackName =
 const region =
   app.node.tryGetContext('region') || process.env.AWS_REGION || 'us-east-1';
 
-new WorkflowStack(app, 'WorkflowStack', {
+// Use the stack name as both construct ID and CloudFormation stack name
+new WorkflowStack(app, stackName, {
   stackName: stackName,
   description: 'AWS Workflow DevKit Infrastructure - DynamoDB, SQS, Lambda, S3',
   env: {
