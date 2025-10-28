@@ -290,54 +290,6 @@ npx aws-workflow outputs
 
 **Typical monthly cost for moderate usage:** $5-20
 
-## Limitations & Caveats
-
-⚠️ **Beta Software Warnings:**
-
-1. **API Stability**: APIs may change between versions
-2. **Production Use**: Test thoroughly before production deployment
-3. **Error Handling**: Custom error handling may be needed for edge cases
-4. **Concurrent Execution**: Lambda concurrency limits apply (default: 1000)
-5. **DynamoDB Limits**: Write capacity may need adjustment for high throughput
-6. **Payload Size**: SQS messages limited to 256KB (larger payloads use S3)
-
-## Known Issues
-
-### Multi-Step Workflow Resume Bug
-
-**Status:** 🔴 Critical runtime issue in `@workflow/core` (not AWS-specific)
-
-**Symptoms:**
-- First step in a workflow executes successfully
-- Subsequent steps fail with `Runtime.NodeJsExit` error when workflow attempts to resume
-- Workflow status remains "running" indefinitely
-
-**Root Cause:**
-The workflow runtime's replay mechanism has a bug that causes promise rejections when resuming execution after a step completes. This is a core runtime issue affecting all environments, not specific to AWS infrastructure.
-
-**Workaround:**
-Use single-step workflows for production:
-
-```typescript
-// ✅ Works - Single step
-export async function processPayment(orderId: string) {
-  'use workflow';
-
-  const result = await handlePayment(orderId);
-  return result;
-}
-
-// ❌ Broken - Multiple steps
-export async function processOrder(orderId: string) {
-  'use workflow';
-
-  const payment = await processPayment(orderId);  // ✅ First step works
-  const shipping = await calculateShipping(orderId); // ❌ Crashes on resume
-}
-```
-
-For complex workflows, chain single-step workflows using AWS Step Functions or your own orchestration.
-
 ## Troubleshooting
 
 ### Deployment fails with "Cannot find asset"
