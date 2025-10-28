@@ -18,6 +18,28 @@ AWS World implementation for [Workflow DevKit](https://useworkflow.dev/) - Run d
 - ✅ Automatic retries and error handling
 - ✅ No vendor lock-in - same code runs locally or on any cloud
 
+## Getting Started (Quick)
+
+- **Install**
+
+```bash
+npm install aws-workflow
+```
+
+- **Write workflows** in your project (e.g., `workflows/`)
+
+- **Bootstrap AWS resources**
+
+```bash
+npx aws-workflow bootstrap -y
+```
+
+- **Deploy your workflow to Lambda**
+
+```bash
+npx aws-workflow deploy
+```
+
 ## Quick Start
 
 ### Prerequisites
@@ -131,7 +153,7 @@ async function sendFollowUpEmail(email: string) {
 Whenever you add or update workflows, deploy them:
 
 ```bash
-npm run deploy
+npx aws-workflow deploy
 ```
 
 **What this does:**
@@ -227,19 +249,19 @@ export async function processOrder(orderId: string) {
 
 ```bash
 # Bootstrap AWS infrastructure (first time only)
-npm run bootstrap
+npx aws-workflow bootstrap -y
 
 # Deploy workflows to Lambda
-npm run deploy
+npx aws-workflow deploy
 
 # View Lambda logs in real-time
-npm run logs
+npx aws-workflow logs
 
 # Tear down all AWS resources
-npm run teardown
+npx aws-workflow teardown
 
 # Get current AWS resource info
-npm run outputs
+npx aws-workflow outputs
 ```
 
 ## Configuration
@@ -328,10 +350,10 @@ npm run deploy
 ### Workflows not executing
 ```bash
 # Check Lambda logs
-npm run logs
+npx aws-workflow logs
 
 # Verify environment variables
-npm run outputs
+npx aws-workflow outputs
 ```
 
 ### "Module not found" errors
@@ -364,5 +386,3 @@ MIT - see [LICENSE.md](./LICENSE.md)
 ---
 
 Built with ❤️ by [Langtrace](https://langtrace.ai)
-
-**Part of the [Workflow DevKit](https://useworkflow.dev/) ecosystem**
